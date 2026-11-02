@@ -1,0 +1,17 @@
+name: MAX access check
+on:
+  push:
+    paths: ['.github/workflows/max-check.yml']
+  workflow_dispatch:
+permissions: {}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check MAX channel permission
+        env:
+          TOKEN: ${{ secrets.MAX_BOT_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$TOKEN" || { echo "Missing MAX_BOT_TOKEN"; exit 1; }
+          curl -fsS --max-time 30 -H "Authorization: $TOKEN" 'https://platform-api2.max.ru/chats/-71261823232607/members/me' | jq -e '(.permissions // []) | index("write") != null'
