@@ -2,7 +2,7 @@ name: MAX publisher
 'on':
   push:
     branches: [main]
-    paths: ['.github/workflows/max-publish.yml', 'PUCOT_MAX_GitHub_Actions.zip']
+    paths: ['.github/workflows/max-publish.yml', 'PUCOT_MAX_GitHub_Actions.zip', '.github/workflows/PUCOT_MAX_GitHub_Actions.zip']
   workflow_dispatch:
   schedule:
     - cron: '15 6 * * *'
@@ -44,15 +44,17 @@ jobs:
           api me | jq -e '.is_bot and .username == "id9103102000_bot"'
           api chats/-71261823232607/members/me | jq -e '(.permissions // []) | index("write") != null'
       - name: Update the original post or publish the current slot
-        if: github.event_name == 'schedule' || hashFiles('PUCOT_MAX_GitHub_Actions.zip') != ''
+        if: github.event_name == 'schedule' || hashFiles('PUCOT_MAX_GitHub_Actions.zip', '.github/workflows/PUCOT_MAX_GitHub_Actions.zip') != ''
         env:
           MAX_BOT_TOKEN: ${{ secrets.MAX_BOT_TOKEN }}
           MODE: ${{ github.event_name == 'schedule' && 'due' || 'repair' }}
           GITHUB_TOKEN: ${{ github.token }}
           POST_CRON: ${{ github.event.schedule }}
-          run: |
+        run: |
           set -euo pipefail
           p="$RUNNER_TEMP/pucot-release"
-          unzip -q PUCOT_MAX_GitHub_Actions.zip 'publish.py' 'max-root.pem' 'ready/*.json' 'media/*.png' -d "$p"
+          archive=PUCOT_MAX_GitHub_Actions.zip
+          if [ ! -f "$archive" ]; then archive=".github/workflows/$archive"; fi
+          unzip -q "$archive" 'publish.py' 'max-root.pem' 'ready/*.json' 'media/*.png' -d "$p"
           echo "fb26479fe8255767c02e2c5a9fc5ccc628db8e7c7e328e119d78983f0b3748fe  $p/publish.py" | sha256sum -c -
           python3 -I "$p/publish.py" "$MODE"
