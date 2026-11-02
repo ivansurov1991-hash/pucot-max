@@ -1,0 +1,58 @@
+name: MAX publisher
+'on':
+  push:
+    branches: [main]
+    paths: ['.github/workflows/max-publish.yml', 'PUCOT_MAX_GitHub_Actions.zip']
+  workflow_dispatch:
+  schedule:
+    - cron: '15 6 * * *'
+    - cron: '10 7 * * *'
+    - cron: '0 8 * * *'
+    - cron: '0 9 * * *'
+    - cron: '0 10 * * *'
+    - cron: '0 11 * * *'
+    - cron: '0 12 * * *'
+    - cron: '0 13 * * *'
+    - cron: '0 14 * * *'
+    - cron: '0 16 * * *'
+permissions:
+  actions: read
+  contents: write
+concurrency:
+  group: pucot-max-publisher
+  cancel-in-progress: false
+jobs:
+  max:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: MAX bot and channel
+        env:
+          TOKEN: ${{ secrets.MAX_BOT_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$TOKEN"
+          ca="$RUNNER_TEMP/max.pem"
+          curl -fsS --max-time 30 https://raw.githubusercontent.com/cocaman/russian_root_ca/3727885226e78ad0442a9f5dd5ce1f8ce22d5f65/rootca_ssl_rsa2022.cer -o "$ca"
+          openssl x509 -in "$ca" -outform DER -out "$ca.der"
+          echo "d26d2d0231b7c39f92cc738512ba54103519e4405d68b5bd703e9788ca8ecf31  $ca.der" | sha256sum -c -
+          openssl x509 -inform DER -in "$ca.der" -out "$ca"
+          api() { curl -fsS --max-time 30 --cacert "$ca" -H "Authorization: $TOKEN" "https://platform-api2.max.ru/$1"; }
+          api me | jq -e '.is_bot and .username == "id9103102000_bot"'
+          api chats/-71261823232607/members/me | jq -e '(.permissions // []) | index("write") != null'
+      - name: Update the original post or publish the current slot
+        if: github.event_name == 'schedule' || hashFiles('PUCOT_MAX_GitHub_Actions.zip') != ''
+        env:
+          MAX_BOT_TOKEN: ${{ secrets.MAX_BOT_TOKEN }}
+          MODE: ${{ github.event_name == 'schedule' && 'due' || 'repair' }}
+          GITHUB_TOKEN: ${{ github.token }}
+          POST_CRON: ${{ github.event.schedule }}
+          run: |
+          set -euo pipefail
+          p="$RUNNER_TEMP/pucot-release"
+          unzip -q PUCOT_MAX_GitHub_Actions.zip 'publish.py' 'max-root.pem' 'ready/*.json' 'media/*.png' -d "$p"
+          echo "fb26479fe8255767c02e2c5a9fc5ccc628db8e7c7e328e119d78983f0b3748fe  $p/publish.py" | sha256sum -c -
+          python3 -I "$p/publish.py" "$MODE"
